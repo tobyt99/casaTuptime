@@ -3,17 +3,47 @@ name: Website Uptime Monitor
 on:
   schedule:
     - cron: '*/5 * * * *'  # Runs every 5 minutes
-  workflow_dispatch:  # 👈 This enables manual execution
+  workflow_dispatch:  # 👈 Allows manual execution
 
 jobs:
   check-website:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Check Website Status
         run: |
           STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ secrets.WEBSITE_URL }}")
-          if [ "$STATUS" -ne 200 ]; then
+
+          # If status.txt does not exist, create it and assume the site was previously up
+          if [ ! -f status.txt ]; then
+            echo "200" > status.txt
+          fi
+
+          LAST_STATUS=$(cat status.txt)
+
+          # If the website is down now but was up last time, send a down alert
+          if [ "$STATUS" -ne 200 ] && [ "$LAST_STATUS" -eq 200 ]; then
             curl -X POST "https://api.green-api.com/waInstance${{ secrets.GREEN_API_INSTANCE_ID }}/sendMessage/${{ secrets.GREEN_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"chatId": "${{ secrets.WHATSAPP_CHAT_ID }}", "message": "🚨 Website DOWN! Status: '$STATUS' URL: ${{ secrets.WEBSITE_URL }}"}'
+            -d '{"chatId": "${{ secrets.WHATSAPP_CHAT_ID }}", "message": "CasaT is OFFline🚨! Status: '$STATUS' URL: ${{ secrets.WEBSITE_URL }}"}'
           fi
+
+          # If the website is back up now but was down last time, send an "It's up" message
+          if [ "$STATUS" -eq 200 ] && [ "$LAST_STATUS" -ne 200 ]; then
+            curl -X POST "https://api.green-api.com/waInstance${{ secrets.GREEN_API_INSTANCE_ID }}/sendMessage/${{ secrets.GREEN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"chatId": "${{ secrets.WHATSAPP_CHAT_ID }}", "message": "CasaT is back ONline✅! URL: ${{ secrets.WEBSITE_URL }}"}'
+          fi
+
+          # Save the current status for the next run
+          echo "$STATUS" > status.txt
+
+      - name: Commit & Push Status File
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add status.txt
+          git commit -m "Update last known website status" || echo "No changes to commit"
+          git push || echo "No changes to push"
