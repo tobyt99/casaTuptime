@@ -1,0 +1,18 @@
+name: Website Uptime Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
+
+jobs:
+  check-website:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Website Status
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ secrets.WEBSITE_URL }}")
+          if [ "$STATUS" -ne 200 ]; then
+            curl -X POST "https://api.green-api.com/waInstance${{ secrets.GREEN_API_INSTANCE_ID }}/sendMessage/${{ secrets.GREEN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"chatId": "${{ secrets.WHATSAPP_CHAT_ID }}", "message": "🚨 Website DOWN! Status: '$STATUS' URL: ${{ secrets.WEBSITE_URL }}"}'
+          fi
