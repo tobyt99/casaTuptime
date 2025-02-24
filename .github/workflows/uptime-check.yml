@@ -3,6 +3,7 @@ name: Website Uptime Monitor
 on:
   schedule:
     - cron: '*/5 * * * *'  # Runs every 5 minutes
+  workflow_dispatch:  # 👈 This enables manual execution
 
 jobs:
   check-website:
